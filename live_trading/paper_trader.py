@@ -39,7 +39,7 @@ class PaperTrader:
         # Ask Model for Prediction using previous states
         action, self.lstm_states = self.model.predict(
             latest_observation, 
-            state=self.lstm_states, 
+            lstm_states=self.lstm_states, 
             episode_start=self.episode_starts
         )
         # Toggle False after the first step since sequence is continuous

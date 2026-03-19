@@ -1,5 +1,8 @@
 import os
-from fyers_apiv3 import fyersModel
+try:
+    from fyers_apiv3 import fyersModel
+except ImportError:
+    fyersModel = None
 
 class FyersDataFetcher:
     """Class to authenticate with Fyers API (Free) for Indian Stock Market data."""

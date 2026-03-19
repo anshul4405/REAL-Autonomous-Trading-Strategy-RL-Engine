@@ -36,7 +36,7 @@ class BacktestEngine:
         while not done:
             # We explicitly pass lstm context to the agent
             action, lstm_states = self.model.predict(
-                obs, state=lstm_states, episode_start=episode_starts, deterministic=True
+                obs, lstm_states=lstm_states, episode_start=episode_starts
             )
             obs, reward, terminated, truncated, info = self.env.step(action)
             episode_starts = np.zeros((1,), dtype=bool)

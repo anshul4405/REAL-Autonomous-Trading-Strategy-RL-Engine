@@ -13,6 +13,3 @@ python-dotenv
 gymnasium
 stable-baselines3[extra]
 sb3-contrib
-
-# Broker Integration (Indian Market Live)
-kiteconnect

@@ -37,7 +37,11 @@ class RLAgent:
         print(f"LSTM Model & Normalizer saved to {path}")
         
     def predict(self, observation, lstm_states=None, episode_start=None):
-        # We must normalize the raw observation before sending it to the configured model
+        import numpy as np
+        is_1d = len(np.shape(observation)) == 1
+        if is_1d:
+            observation = np.array([observation])
+            
         norm_obs = self.env.normalize_obs(observation)
         action, new_lstm_states = self.model.predict(
             norm_obs, 
@@ -45,4 +49,8 @@ class RLAgent:
             episode_start=episode_start,
             deterministic=True
         )
+        
+        if is_1d and isinstance(action, np.ndarray) and len(action) > 0:
+            action = action[0]
+            
         return action, new_lstm_states

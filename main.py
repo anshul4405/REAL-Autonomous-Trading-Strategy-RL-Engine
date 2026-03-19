@@ -3,7 +3,7 @@ import pandas as pd
 import yfinance as yf
 from dotenv import load_dotenv
 
-from data.fyers_fetcher import FyersDataFetcher
+
 from features.technical_indicators import process_features
 from env.advanced_trading_env import AdvancedTradingEnvironment
 from models.rl_agent import RLAgent
@@ -17,6 +17,7 @@ def main():
     # 1. Fetch High-Resolution Intraday Data
     if os.getenv("FYERS_APP_ID"):
         print("Authenticating with Fyers API for Live Indian Data...")
+        from data.fyers_fetcher import FyersDataFetcher
         fetcher = FyersDataFetcher()
         raw_data = fetcher.fetch_historical_data()
     else:
