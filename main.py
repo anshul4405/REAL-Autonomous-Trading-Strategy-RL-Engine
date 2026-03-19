@@ -1,57 +1,71 @@
 import os
 import pandas as pd
+import yfinance as yf
 from dotenv import load_dotenv
 
-from data.zerodha_fetcher import ZerodhaDataFetcher
+from data.fyers_fetcher import FyersDataFetcher
 from features.technical_indicators import process_features
 from env.advanced_trading_env import AdvancedTradingEnvironment
 from models.rl_agent import RLAgent
-from live_trading.zerodha_executor import ZerodhaExecutor
+from backtesting.engine import BacktestEngine
 
-# Load secrets from .env securely
 load_dotenv()
 
 def main():
     print("=== Advanced LSTM-PPO Indian Market Trading Engine ===")
     
-    # 1. Check Auth & Data Integration
-    if not os.getenv("KITE_API_KEY"):
-        print("CRITICAL: .env file not set up. Please copy .env.example to .env and add your Kite API Key.")
-        print("Running in DEMO offline mode using simulated historic minute-data...\n")
-        raw_data = generate_dummy_data()
+    # 1. Fetch High-Resolution Intraday Data
+    if os.getenv("FYERS_APP_ID"):
+        print("Authenticating with Fyers API for Live Indian Data...")
+        fetcher = FyersDataFetcher()
+        raw_data = fetcher.fetch_historical_data()
     else:
-        print("Authenticating with Zerodha Kite Connect...")
-        fetcher = ZerodhaDataFetcher()
-        # Fetch true intraday 5-minute data logic block
-        token = fetcher.get_instrument_token("INFY")
-        if token:
-            raw_data = fetcher.fetch_historical_data(token, "2023-10-01", "2023-10-30", "5minute")
-        else:
-            raw_data = generate_dummy_data()
+        print("No Fyers API keys found. Fetching FREE High-Frequency Intraday NSE Data via YFinance...")
+        print("Downloading 60 days of 5-Minute Data for Reliance Industries (RELIANCE.NS)...")
+        # Yahoo Finance provides 60 days of free 5-minute data which is perfect for training!
+        raw_data = yf.download("RELIANCE.NS", period="60d", interval="5m", progress=False)
+        if isinstance(raw_data.columns, pd.MultiIndex):
+            raw_data.columns = raw_data.columns.droplevel(1)
+        raw_data.dropna(inplace=True)
             
     # 2. Process High Frequency Strategy Features
+    print("Engineering Technical Indicators (MACD, RSI, Bollinger Bands)...")
     feature_data = process_features(raw_data)
-    print(f"Features mapped with seq lengths: {len(feature_data)}")
+    print(f"Usable 5-minute Intraday Candles generated: {len(feature_data)}")
     
-    # 3. Setup Intraday Environment with Real Indian Taxes & Slippage
-    env = AdvancedTradingEnvironment(feature_data)
-    agent = RLAgent(env=env)
+    # Splitting Data
+    train_size = int(len(feature_data) * 0.8)
+    train_data = feature_data.iloc[:train_size]
+    test_data = feature_data.iloc[train_size:]
     
-    print("\n[SUCCESS] Advanced Agent Initialized with Recurrent LSTM Memory Cells.")
-    print("To begin PPO sequence training on Indian Market data, run `agent.train()`.\n")
-    print("A Streamlit dashboard viewer is accessible via: `streamlit run dashboard/app.py`")
+    # 3. Setup Intraday Environment with Normalization for *Better Predictions*
+    print("\n--- Initializing Recurrent LSTM-PPO Network ---")
+    train_env = AdvancedTradingEnvironment(train_data)
+    agent = RLAgent(env=train_env)
     
-def generate_dummy_data():
-    """Generates synthetic intraday data if Kite auth fails for offline testing."""
-    import numpy as np
-    dates = pd.date_range("2023-10-01 09:15", "2023-10-05 15:30", freq="5min")
-    df = pd.DataFrame(index=dates, columns=["Open", "High", "Low", "Close", "Volume"])
-    df["Close"] = np.cumsum(np.random.randn(len(dates))) + 1500
-    df["Open"] = df["Close"] + np.random.randn(len(dates)) * 2
-    df["High"] = df[["Open", "Close"]].max(axis=1) + np.random.rand(len(dates)) * 5
-    df["Low"] = df[["Open", "Close"]].min(axis=1) - np.random.rand(len(dates)) * 5
-    df["Volume"] = np.random.randint(1000, 50000, size=len(dates))
-    return df
+    print("\n[TRAINING] Commencing Neural Network Training for 15,000 steps...")
+    print("The agent will now learn to actively trade the Reliance 5-minute chart!")
+    agent.train(total_timesteps=15000)
+    agent.save_model("models/lstm_reliance_agent")
+    
+    # 4. Backtesting on completely unseen Testing Data
+    print("\n--- Evaluating LSTM Strategy on Unseen Test Data ---")
+    test_env = AdvancedTradingEnvironment(test_data)
+    backtest_engine = BacktestEngine(env=test_env, model=agent)
+    
+    # The LSTM model evaluates trades step-by-step
+    results = backtest_engine.run_backtest()
+    baseline = backtest_engine.baseline_buy_and_hold()
+    
+    print("\n[RESULTS] RL Agent Performance (Factoring in Indian Taxes & Slippage):")
+    for k, v in results.items():
+        print(f"  {k}: {v:.2f}")
+        
+    print("\n[RESULTS] Traditional Buy & Hold Performance:")
+    for k, v in baseline.items():
+        print(f"  {k}: {v:.2f}")
+
+    print("\nA Streamlit dashboard viewer is accessible via: `streamlit run dashboard/app.py`")
 
 if __name__ == "__main__":
     main()

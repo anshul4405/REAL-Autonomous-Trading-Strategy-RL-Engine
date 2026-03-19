@@ -1,13 +1,16 @@
 import os
 from sb3_contrib import RecurrentPPO
-from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 class RLAgent:
     """Advanced Wrapper class for the LSTM-PPO agent from Stable-Baselines3 Contrib."""
     
     def __init__(self, env):
-        # Stable Baselines3 requires a vectorized environment
-        self.env = DummyVecEnv([lambda: env])
+        # Neural Networks struggle with raw pricing data ($1500 vs $0.0001). 
+        # VecNormalize automatically scales observations (features) and rewards to a standard normal distribution.
+        # This guarantees SUBSTANTIALLY better and faster convergence/predictions for the LSTM.
+        self.raw_env = DummyVecEnv([lambda: env])
+        self.env = VecNormalize(self.raw_env, norm_obs=True, norm_reward=True, clip_obs=10.)
         
         # Initialize RecurrentPPO model with MlpLstmPolicy for sequence memory over time
         self.model = RecurrentPPO(
@@ -22,32 +25,22 @@ class RLAgent:
         )
         
     def train(self, total_timesteps=15000):
-        """Train the LSTM-PPO agent."""
         print(f"Training Advanced LSTM-PPO agent for {total_timesteps} timesteps...")
         self.model.learn(total_timesteps=total_timesteps)
         print("Training completed.")
         
     def save_model(self, path="models/lstm_ppo_trading_agent"):
-        """Save the trained Recurrent agent."""
         os.makedirs(os.path.dirname(path), exist_ok=True)
         self.model.save(path)
-        print(f"LSTM Model saved to {path}.zip")
+        # Also save the normalizer statistics so live predictions map identically to training
+        self.env.save(f"{path}_vecnormalize.pkl")
+        print(f"LSTM Model & Normalizer saved to {path}")
         
-    def load_model(self, path="models/lstm_ppo_trading_agent"):
-        """Load an existing Recurrent agent."""
-        if os.path.exists(f"{path}.zip"):
-            self.model = RecurrentPPO.load(path, env=self.env)
-            print(f"LSTM Model loaded from {path}.zip")
-        else:
-            raise FileNotFoundError(f"No model found at {path}.zip")
-            
     def predict(self, observation, lstm_states=None, episode_start=None):
-        """
-        Get an action from the recurrent agent. 
-        LSTM networks strictly require the hidden state vectors from the preceding predict call.
-        """
+        # We must normalize the raw observation before sending it to the configured model
+        norm_obs = self.env.normalize_obs(observation)
         action, new_lstm_states = self.model.predict(
-            observation, 
+            norm_obs, 
             state=lstm_states, 
             episode_start=episode_start,
             deterministic=True
