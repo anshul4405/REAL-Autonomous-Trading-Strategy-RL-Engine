@@ -1,0 +1,9 @@
+# Autonomous Trading Strategy Requirements
+pandas
+numpy
+yfinance
+gymnasium
+stable-baselines3[extra]
+streamlit
+matplotlib
+scikit-learn
