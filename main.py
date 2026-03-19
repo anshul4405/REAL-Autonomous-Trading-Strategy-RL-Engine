@@ -3,7 +3,7 @@ import pandas as pd
 import yfinance as yf
 from dotenv import load_dotenv
 
-
+from data.fyers_fetcher import FyersDataFetcher
 from features.technical_indicators import process_features
 from env.advanced_trading_env import AdvancedTradingEnvironment
 from models.rl_agent import RLAgent
@@ -12,61 +12,80 @@ from backtesting.engine import BacktestEngine
 load_dotenv()
 
 def main():
-    print("=== Advanced LSTM-PPO Indian Market Trading Engine ===")
+    print("=== Universal LSTM-PPO Indian Market Trading Engine ===")
     
-    # 1. Fetch High-Resolution Intraday Data
-    if os.getenv("FYERS_APP_ID"):
-        print("Authenticating with Fyers API for Live Indian Data...")
-        from data.fyers_fetcher import FyersDataFetcher
-        fetcher = FyersDataFetcher()
-        raw_data = fetcher.fetch_historical_data()
-    else:
-        print("No Fyers API keys found. Fetching FREE High-Frequency Intraday NSE Data via YFinance...")
-        print("Downloading 60 days of 5-Minute Data for Reliance Industries (RELIANCE.NS)...")
-        # Yahoo Finance provides 60 days of free 5-minute data which is perfect for training!
-        raw_data = yf.download("RELIANCE.NS", period="60d", interval="5m", progress=False)
-        if isinstance(raw_data.columns, pd.MultiIndex):
+    # Core Strategy: Generalize the AI across the Top 5 NIFTY50 heavyweight stocks!
+    # By training sequentially, the LSTM learns universal price action rules instead of memorizing just one stock.
+    tickers = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS"]
+    
+    print(f"\n--- Universal Free Pipeline: Fetching {len(tickers)} Heavyweight Assets via Yahoo Finance ---")
+    
+    # 1. Initialize RL Framework strictly on the first asset to dictate Neural Architecture shape
+    first_ticker = tickers[0]
+    print(f"\n[AI SEQUENCE 1] Processing foundational base asset: {first_ticker}")
+    
+    raw_data = yf.download(first_ticker, period="60d", interval="5m", progress=False)
+    if isinstance(raw_data.columns, pd.MultiIndex):
             raw_data.columns = raw_data.columns.droplevel(1)
-        raw_data.dropna(inplace=True)
             
-    # 2. Process High Frequency Strategy Features
-    print("Engineering Technical Indicators (MACD, RSI, Bollinger Bands)...")
-    feature_data = process_features(raw_data)
-    print(f"Usable 5-minute Intraday Candles generated: {len(feature_data)}")
+    first_features = process_features(raw_data)
+    train_size = int(len(first_features) * 0.8)
+    first_train_data = first_features.iloc[:train_size]
     
-    # Splitting Data
-    train_size = int(len(feature_data) * 0.8)
-    train_data = feature_data.iloc[:train_size]
-    test_data = feature_data.iloc[train_size:]
+    # Booting Environment and AI
+    base_env = AdvancedTradingEnvironment(first_train_data)
+    agent = RLAgent(env=base_env)
     
-    # 3. Setup Intraday Environment with Normalization for *Better Predictions*
-    print("\n--- Initializing Recurrent LSTM-PPO Network ---")
-    train_env = AdvancedTradingEnvironment(train_data)
-    agent = RLAgent(env=train_env)
+    print(f"Commencing Initial Neural Sequence Training (10,000 steps)...")
+    agent.train(total_timesteps=10000)
     
-    print("\n[TRAINING] Commencing Neural Network Training for 15,000 steps...")
-    print("The agent will now learn to actively trade the Reliance 5-minute chart!")
-    agent.train(total_timesteps=15000)
-    agent.save_model("models/lstm_reliance_agent")
+    # 2. Iterate flawlessly through the rest of the market universe!
+    sequence_num = 2
+    for ticker in tickers[1:]:
+        print(f"\n[AI SEQUENCE {sequence_num}] Migrating Universal Memory to: {ticker}")
+        
+        curr_raw = yf.download(ticker, period="60d", interval="5m", progress=False)
+        if isinstance(curr_raw.columns, pd.MultiIndex):
+            curr_raw.columns = curr_raw.columns.droplevel(1)
+            
+        curr_features = process_features(curr_raw)
+        curr_train = curr_features.iloc[:int(len(curr_features) * 0.8)]
+        
+        # HOT-SWAP the Environment! Keep the original standard deviation weights locked in.
+        new_env = AdvancedTradingEnvironment(curr_train)
+        agent.set_env(new_env)
+        
+        print(f"Resuming Universal Engine Training (10,000 steps)...")
+        agent.train(total_timesteps=10000)
+        sequence_num += 1
+        
+    print("\nSaving the Fully Generalized Master Universal Network!")
+    agent.save_model("models/lstm_universal_nifty_master")
     
-    # 4. Backtesting on completely unseen Testing Data
-    print("\n--- Evaluating LSTM Strategy on Unseen Test Data ---")
+    # 3. Evaluate the highly rigorous model against entirely unseen data context
+    test_ticker = tickers[-1]
+    print(f"\n--- Evaluating Universal LSTM Intelligence strictly on {test_ticker} Test Dataset ---")
+    
+    # Slice the unseen evaluation chunk out of the final processed token loop 
+    test_data = curr_features.iloc[int(len(curr_features) * 0.8):]
     test_env = AdvancedTradingEnvironment(test_data)
-    backtest_engine = BacktestEngine(env=test_env, model=agent)
     
-    # The LSTM model evaluates trades step-by-step
+    agent.set_env(test_env)
+    agent.env.training = False  # Disable statistical mutation for accurate live backtesting!
+    
+    backtest_engine = BacktestEngine(env=test_env, model=agent)
     results = backtest_engine.run_backtest()
     baseline = backtest_engine.baseline_buy_and_hold()
     
-    print("\n[RESULTS] RL Agent Performance (Factoring in Indian Taxes & Slippage):")
+    print("\n[RESULTS] Universal AI Generalization Performance (Post Indian Slippage/Taxes):")
     for k, v in results.items():
         print(f"  {k}: {v:.2f}")
         
-    print("\n[RESULTS] Traditional Buy & Hold Performance:")
+    print("\n[RESULTS] Baseline Traditional Holding metric over test phase:")
     for k, v in baseline.items():
         print(f"  {k}: {v:.2f}")
 
-    print("\nA Streamlit dashboard viewer is accessible via: `streamlit run dashboard/app.py`")
+    print("\nA Streamlit realtime interactive interface can be launched via: `streamlit run dashboard/app.py`")
 
 if __name__ == "__main__":
     main()

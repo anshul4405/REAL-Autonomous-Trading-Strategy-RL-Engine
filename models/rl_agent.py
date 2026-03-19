@@ -24,6 +24,16 @@ class RLAgent:
             gamma=0.99
         )
         
+    def set_env(self, new_env):
+        """Hot-swap the trading asset environment without destroying learned LSTM normalization statistics."""
+        self.raw_env = DummyVecEnv([lambda: new_env])
+        # Inherit the exact observation and reward normalization distributions from the previous asset
+        new_vec_norm = VecNormalize(self.raw_env, norm_obs=True, norm_reward=True, clip_obs=10.)
+        new_vec_norm.obs_rms = self.env.obs_rms
+        new_vec_norm.ret_rms = self.env.ret_rms
+        self.env = new_vec_norm
+        self.model.set_env(self.env)
+        
     def train(self, total_timesteps=15000):
         print(f"Training Advanced LSTM-PPO agent for {total_timesteps} timesteps...")
         self.model.learn(total_timesteps=total_timesteps)
