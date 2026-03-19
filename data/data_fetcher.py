@@ -25,6 +25,10 @@ class HistoricalDataFetcher:
                 print(f"No data fetched for {self.ticker}.")
                 return pd.DataFrame()
                 
+            # Handle MultiIndex columns from recent yfinance updates
+            if isinstance(data.columns, pd.MultiIndex):
+                data.columns = data.columns.droplevel(1)
+                
             # Drop any missing values purely for cleaner start
             data.dropna(inplace=True)
             

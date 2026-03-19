@@ -1,9 +1,18 @@
-# Autonomous Trading Strategy Requirements
+# General Data Science & Math
 pandas
 numpy
 yfinance
-gymnasium
-stable-baselines3[extra]
-streamlit
 matplotlib
 scikit-learn
+
+# Strategy & Dashboard
+streamlit
+python-dotenv
+
+# RL Framework & Environment
+gymnasium
+stable-baselines3[extra]
+sb3-contrib
+
+# Broker Integration (Indian Market Live)
+kiteconnect

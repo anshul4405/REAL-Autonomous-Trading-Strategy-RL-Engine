@@ -1,8 +1,6 @@
 import numpy as np
 import pandas as pd
 
-import copy
-
 class BacktestEngine:
     def __init__(self, env, model):
         self.env = env
@@ -11,8 +9,7 @@ class BacktestEngine:
     def calculate_sharpe_ratio(self, returns, risk_free_rate=0.0):
         if len(returns) == 0 or np.std(returns) == 0:
             return 0
-        # Approx annualized sharpe ratio assuming daily data
-        return (np.mean(returns) - risk_free_rate) / np.std(returns) * np.sqrt(252)
+        return (np.mean(returns) - risk_free_rate) / np.std(returns) * np.sqrt(252 * 375) # Approximately 375 minutes in an Indian trading day
 
     def calculate_max_drawdown(self, portfolio_values):
         peak = portfolio_values[0]
@@ -28,14 +25,22 @@ class BacktestEngine:
         return max_dd
 
     def run_backtest(self):
-        """Evaluates the model over the provided environment."""
+        """Evaluates the LSTM model over the provided environment."""
         obs, _ = self.env.reset()
         portfolio_values = [self.env.net_worth]
         
+        lstm_states = None
+        episode_starts = np.ones((1,), dtype=bool)
         done = False
+        
         while not done:
-            action, _states = self.model.predict(obs, deterministic=True)
+            # We explicitly pass lstm context to the agent
+            action, lstm_states = self.model.predict(
+                obs, state=lstm_states, episode_start=episode_starts, deterministic=True
+            )
             obs, reward, terminated, truncated, info = self.env.step(action)
+            episode_starts = np.zeros((1,), dtype=bool)
+            
             portfolio_values.append(self.env.net_worth)
             done = terminated or truncated
             
@@ -44,7 +49,6 @@ class BacktestEngine:
         sharpe = self.calculate_sharpe_ratio(returns)
         max_dd = self.calculate_max_drawdown(portfolio_values)
         
-        # Calculate Win Rate (profitable steps vs loss steps)
         win_steps = len(returns[returns > 0])
         win_rate = win_steps / len(returns) if len(returns) > 0 else 0
 

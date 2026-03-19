@@ -1,56 +1,57 @@
 import os
 import pandas as pd
+from dotenv import load_dotenv
 
-from data.data_fetcher import HistoricalDataFetcher
+from data.zerodha_fetcher import ZerodhaDataFetcher
 from features.technical_indicators import process_features
-from env.trading_env import TradingEnvironment
+from env.advanced_trading_env import AdvancedTradingEnvironment
 from models.rl_agent import RLAgent
-from backtesting.engine import BacktestEngine
+from live_trading.zerodha_executor import ZerodhaExecutor
+
+# Load secrets from .env securely
+load_dotenv()
 
 def main():
-    print("=== Autonomous Trading System using RL ===")
+    print("=== Advanced LSTM-PPO Indian Market Trading Engine ===")
     
-    # 1. Data Collection
-    print("\n--- 1. Data Collection ---")
-    fetcher = HistoricalDataFetcher(ticker="AAPL", start_date="2020-01-01", end_date="2023-01-01")
-    raw_data = fetcher.fetch_data(save_csv=True)
-    if raw_data.empty:
-        print("Failed to fetch data. Ensure yfinance is installed and online.")
-        return
-        
-    # 2. Feature Engineering
-    print("\n--- 2. Feature Engineering ---")
+    # 1. Check Auth & Data Integration
+    if not os.getenv("KITE_API_KEY"):
+        print("CRITICAL: .env file not set up. Please copy .env.example to .env and add your Kite API Key.")
+        print("Running in DEMO offline mode using simulated historic minute-data...\n")
+        raw_data = generate_dummy_data()
+    else:
+        print("Authenticating with Zerodha Kite Connect...")
+        fetcher = ZerodhaDataFetcher()
+        # Fetch true intraday 5-minute data logic block
+        token = fetcher.get_instrument_token("INFY")
+        if token:
+            raw_data = fetcher.fetch_historical_data(token, "2023-10-01", "2023-10-30", "5minute")
+        else:
+            raw_data = generate_dummy_data()
+            
+    # 2. Process High Frequency Strategy Features
     feature_data = process_features(raw_data)
-    print(f"Features prepared. Usable Datapoints: {len(feature_data)}")
+    print(f"Features mapped with seq lengths: {len(feature_data)}")
     
-    # Split Data (Train: 80%, Test: 20%)
-    train_size = int(len(feature_data) * 0.8)
-    train_data = feature_data.iloc[:train_size]
-    test_data = feature_data.iloc[train_size:]
+    # 3. Setup Intraday Environment with Real Indian Taxes & Slippage
+    env = AdvancedTradingEnvironment(feature_data)
+    agent = RLAgent(env=env)
     
-    # 3. RL Environment & Agent
-    print("\n--- 3. RL Environment Setup ---")
-    train_env = TradingEnvironment(train_data)
-    agent = RLAgent(env=train_env)
+    print("\n[SUCCESS] Advanced Agent Initialized with Recurrent LSTM Memory Cells.")
+    print("To begin PPO sequence training on Indian Market data, run `agent.train()`.\n")
+    print("A Streamlit dashboard viewer is accessible via: `streamlit run dashboard/app.py`")
     
-    print("Agent initialized successfully. (Training is disabled in the main demo script)")
-    
-    # Optional: Un-comment to actually train
-    # print("Training Agent...")
-    # agent.train(total_timesteps=10000)
-    # agent.save_model("models/ppo_aapl_agent")
-    
-    # 4. Backtesting
-    print("\n--- 4. Backtesting Setup ---")
-    test_env = TradingEnvironment(test_data)
-    backtest_engine = BacktestEngine(env=test_env, model=agent.model)
-    
-    baseline_metrics = backtest_engine.baseline_buy_and_hold()
-    print("Baseline (Buy & Hold) Performance over Test Period:")
-    for k, v in baseline_metrics.items():
-        print(f"  {k}: {v:.2f}")
-        
-    print("\nSetup complete! To visualize the trading interface, run: streamlit run dashboard/app.py")
+def generate_dummy_data():
+    """Generates synthetic intraday data if Kite auth fails for offline testing."""
+    import numpy as np
+    dates = pd.date_range("2023-10-01 09:15", "2023-10-05 15:30", freq="5min")
+    df = pd.DataFrame(index=dates, columns=["Open", "High", "Low", "Close", "Volume"])
+    df["Close"] = np.cumsum(np.random.randn(len(dates))) + 1500
+    df["Open"] = df["Close"] + np.random.randn(len(dates)) * 2
+    df["High"] = df[["Open", "Close"]].max(axis=1) + np.random.rand(len(dates)) * 5
+    df["Low"] = df[["Open", "Close"]].min(axis=1) - np.random.rand(len(dates)) * 5
+    df["Volume"] = np.random.randint(1000, 50000, size=len(dates))
+    return df
 
 if __name__ == "__main__":
     main()
